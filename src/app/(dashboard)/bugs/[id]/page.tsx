@@ -4,6 +4,7 @@ import { getSupabase } from '@/lib/supabase';
 import type { BugReportWithApp, BugStatus } from '@/lib/types';
 import { STATUS_LABELS, STATUS_CLASSES } from '@/lib/statusConfig';
 import StatusUpdater from './StatusUpdater';
+import ExternalLink from '@/components/ExternalLink';
 
 export const dynamic = 'force-dynamic';
 
@@ -91,14 +92,12 @@ export default async function BugDetailPage({ params }: PageProps) {
           <div>
             <p className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-1.5">URL</p>
             {bug.url ? (
-              <a
+              <ExternalLink
                 href={bug.url}
-                target="_blank"
-                rel="noopener noreferrer"
                 className="text-sm text-blue-400 hover:text-blue-300 hover:underline break-all"
               >
                 {bug.url}
-              </a>
+              </ExternalLink>
             ) : (
               <p className="text-sm text-gray-600">Not provided</p>
             )}

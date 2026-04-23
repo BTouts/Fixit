@@ -3,6 +3,7 @@ import { getSupabase } from '@/lib/supabase';
 import type { BugReportWithApp } from '@/lib/types';
 import { relativeTime } from '@/lib/relativeTime';
 import { STATUS_LABELS, STATUS_CLASSES } from '@/lib/statusConfig';
+import ExternalLink from '@/components/ExternalLink';
 
 export const dynamic = 'force-dynamic';
 
@@ -74,15 +75,13 @@ export default async function BugsPage() {
                   </td>
                   <td className="px-4 py-3 text-gray-400 max-w-[200px] truncate">
                     {bug.url ? (
-                      <a
+                      <ExternalLink
                         href={bug.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
                         className="text-blue-400 hover:text-blue-300 hover:underline text-xs"
                         title={bug.url}
                       >
                         {bug.url}
-                      </a>
+                      </ExternalLink>
                     ) : (
                       <span className="text-gray-600">—</span>
                     )}
