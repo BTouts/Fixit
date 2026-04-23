@@ -80,7 +80,6 @@ export default async function BugsPage() {
                         rel="noopener noreferrer"
                         className="text-blue-400 hover:text-blue-300 hover:underline text-xs"
                         title={bug.url}
-                        onClick={(e) => e.stopPropagation()}
                       >
                         {bug.url}
                       </a>
