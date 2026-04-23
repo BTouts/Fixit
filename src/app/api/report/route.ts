@@ -10,6 +10,8 @@ const CORS_HEADERS = {
   'Access-Control-Allow-Headers': 'Content-Type, Authorization',
 };
 
+const MAX_BODY_BYTES = 64 * 1024; // 64 KB
+
 export async function OPTIONS() {
   return new NextResponse(null, { status: 204, headers: CORS_HEADERS });
 }
@@ -18,19 +20,42 @@ function getResend() {
   return new Resend(process.env.RESEND_API_KEY);
 }
 
-type BugReportBody = {
-  description: unknown;
-  url?: unknown;
-  user_agent?: unknown;
-  context?: unknown;
-};
-
 type AppRow = {
   id: string;
   name: string;
 };
 
+function validateUrl(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  try {
+    const u = new URL(value);
+    if (u.protocol !== 'http:' && u.protocol !== 'https:') return null;
+    return u.toString().slice(0, 2048);
+  } catch {
+    return null;
+  }
+}
+
+function validateContext(value: unknown): Record<string, unknown> {
+  if (
+    typeof value !== 'object' ||
+    value === null ||
+    Array.isArray(value)
+  ) {
+    return {};
+  }
+  const serialized = JSON.stringify(value);
+  if (serialized.length > 4096) return {};
+  return value as Record<string, unknown>;
+}
+
 export async function POST(request: NextRequest): Promise<NextResponse> {
+  // Reject oversized bodies before parsing
+  const contentLength = Number(request.headers.get('content-length') ?? 0);
+  if (contentLength > MAX_BODY_BYTES) {
+    return NextResponse.json({ error: 'Payload too large' }, { status: 413, headers: CORS_HEADERS });
+  }
+
   const authHeader = request.headers.get('authorization') ?? '';
   const match = authHeader.match(/^Bearer\s+(.+)$/i);
 
@@ -51,9 +76,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: CORS_HEADERS });
   }
 
-  let body: BugReportBody;
+  let body: Record<string, unknown>;
   try {
-    body = (await request.json()) as BugReportBody;
+    body = (await request.json()) as Record<string, unknown>;
   } catch {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400, headers: CORS_HEADERS });
   }
@@ -67,14 +92,26 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     );
   }
 
+  if (description.trim().length > 2000) {
+    return NextResponse.json(
+      { error: '`description` must be 2000 characters or fewer' },
+      { status: 400, headers: CORS_HEADERS },
+    );
+  }
+
+  const safeUrl = validateUrl(url);
+  const safeUserAgent =
+    typeof user_agent === 'string' ? user_agent.slice(0, 512) : null;
+  const safeContext = validateContext(context);
+
   const { data: report, error: insertError } = await getSupabase()
     .from('bug_reports')
     .insert({
       app_id: app.id,
       description: description.trim(),
-      url: typeof url === 'string' ? url : null,
-      user_agent: typeof user_agent === 'string' ? user_agent : null,
-      context: context !== undefined ? context : {},
+      url: safeUrl,
+      user_agent: safeUserAgent,
+      context: safeContext,
     })
     .select('id')
     .single<{ id: string }>();
@@ -87,7 +124,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   const emailBody = [
     `App:         ${app.name}`,
     `Description: ${description.trim()}`,
-    `URL:         ${typeof url === 'string' ? url : '(not provided)'}`,
+    `URL:         ${safeUrl ?? '(not provided)'}`,
     `Timestamp:   ${timestamp}`,
   ].join('\n');
 

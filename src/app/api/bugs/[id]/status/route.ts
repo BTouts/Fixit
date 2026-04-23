@@ -3,6 +3,7 @@ import type { NextRequest } from 'next/server';
 import { getSupabase } from '@/lib/supabase';
 import type { BugStatus } from '@/lib/types';
 import { cookies } from 'next/headers';
+import { verifySession } from '@/lib/session';
 
 const VALID_STATUSES: BugStatus[] = ['open', 'in_progress', 'resolved', 'closed'];
 
@@ -11,11 +12,18 @@ interface RouteContext {
 }
 
 export async function PATCH(request: NextRequest, context: RouteContext) {
+  // Verify session
   const cookieStore = await cookies();
-  const session = cookieStore.get('fixit_session');
-
-  if (!session || session.value !== '1') {
+  const token = cookieStore.get('fixit_session')?.value;
+  if (!token || !(await verifySession(token))) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  // CSRF: reject cross-origin requests
+  const origin = request.headers.get('origin');
+  const host = request.headers.get('host');
+  if (origin && host && new URL(origin).host !== host) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
   const { id } = await context.params;
@@ -31,7 +39,8 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     .eq('id', id);
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    console.error('status update failed', { error, id });
+    return NextResponse.json({ error: 'Failed to update status' }, { status: 500 });
   }
 
   return NextResponse.json({ ok: true });
