@@ -4,6 +4,16 @@ import type { NextRequest } from 'next/server';
 import { Resend } from 'resend';
 import { getSupabase } from '@/lib/supabase';
 
+const CORS_HEADERS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+};
+
+export async function OPTIONS() {
+  return new NextResponse(null, { status: 204, headers: CORS_HEADERS });
+}
+
 function getResend() {
   return new Resend(process.env.RESEND_API_KEY);
 }
@@ -25,7 +35,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   const match = authHeader.match(/^Bearer\s+(.+)$/i);
 
   if (!match) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: CORS_HEADERS });
   }
 
   const rawKey = match[1];
@@ -38,14 +48,14 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     .single<AppRow>();
 
   if (appError || !app) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: CORS_HEADERS });
   }
 
   let body: BugReportBody;
   try {
     body = (await request.json()) as BugReportBody;
   } catch {
-    return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
+    return NextResponse.json({ error: 'Invalid JSON' }, { status: 400, headers: CORS_HEADERS });
   }
 
   const { description, url, user_agent, context } = body;
@@ -53,7 +63,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   if (typeof description !== 'string' || description.trim() === '') {
     return NextResponse.json(
       { error: '`description` is required and must be a non-empty string' },
-      { status: 400 },
+      { status: 400, headers: CORS_HEADERS },
     );
   }
 
@@ -70,7 +80,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     .single<{ id: string }>();
 
   if (insertError || !report) {
-    return NextResponse.json({ error: 'Failed to create report' }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to create report' }, { status: 500, headers: CORS_HEADERS });
   }
 
   const timestamp = new Date().toUTCString();
@@ -88,5 +98,5 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     text: emailBody,
   });
 
-  return NextResponse.json({ id: report.id }, { status: 201 });
+  return NextResponse.json({ id: report.id }, { status: 201, headers: CORS_HEADERS });
 }
