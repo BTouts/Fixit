@@ -19,11 +19,19 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  // CSRF: reject cross-origin requests
-  const origin = request.headers.get('origin');
-  const host = request.headers.get('host');
-  if (origin && host && new URL(origin).host !== host) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  // CSRF: require the custom sentinel header that cross-site requests cannot set.
+  // Falls back to Origin/Referer check as a secondary signal.
+  const csrfHeader = request.headers.get('x-fixit-csrf');
+  if (csrfHeader !== '1') {
+    const origin = request.headers.get('origin');
+    const referer = request.headers.get('referer');
+    const host = request.headers.get('host');
+    const originHost = origin ? new URL(origin).host : null;
+    const refererHost = referer ? (() => { try { return new URL(referer).host; } catch { return null; } })() : null;
+    const sameOrigin = (originHost && originHost === host) || (refererHost && refererHost === host);
+    if (!sameOrigin) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
   }
 
   const { id } = await context.params;

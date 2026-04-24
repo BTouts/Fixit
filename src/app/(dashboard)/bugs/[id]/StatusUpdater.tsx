@@ -24,7 +24,7 @@ export default function StatusUpdater({ bugId, initialStatus }: StatusUpdaterPro
       try {
         const res = await fetch(`/api/bugs/${bugId}/status`, {
           method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', 'x-fixit-csrf': '1' },
           body: JSON.stringify({ status: next }),
         });
 

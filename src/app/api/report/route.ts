@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { Resend } from 'resend';
 import { getSupabase } from '@/lib/supabase';
+import { checkRateLimit } from '@/lib/rateLimit';
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -10,7 +11,7 @@ const CORS_HEADERS = {
   'Access-Control-Allow-Headers': 'Content-Type, Authorization',
 };
 
-const MAX_BODY_BYTES = 64 * 1024; // 64 KB
+const MAX_BODY_BYTES = 64 * 1024;
 
 export async function OPTIONS() {
   return new NextResponse(null, { status: 204, headers: CORS_HEADERS });
@@ -37,20 +38,12 @@ function validateUrl(value: unknown): string | null {
 }
 
 function validateContext(value: unknown): Record<string, unknown> {
-  if (
-    typeof value !== 'object' ||
-    value === null ||
-    Array.isArray(value)
-  ) {
-    return {};
-  }
-  const serialized = JSON.stringify(value);
-  if (serialized.length > 4096) return {};
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return {};
+  if (JSON.stringify(value).length > 4096) return {};
   return value as Record<string, unknown>;
 }
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
-  // Reject oversized bodies before parsing
   const contentLength = Number(request.headers.get('content-length') ?? 0);
   if (contentLength > MAX_BODY_BYTES) {
     return NextResponse.json({ error: 'Payload too large' }, { status: 413, headers: CORS_HEADERS });
@@ -58,7 +51,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   const authHeader = request.headers.get('authorization') ?? '';
   const match = authHeader.match(/^Bearer\s+(.+)$/i);
-
   if (!match) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: CORS_HEADERS });
   }
@@ -76,6 +68,15 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: CORS_HEADERS });
   }
 
+  // Rate limit: 60 reports per hour per app
+  const rl = await checkRateLimit(`report:${app.id}`, 60, 60 * 60);
+  if (!rl.allowed) {
+    return NextResponse.json(
+      { error: 'Rate limit exceeded. Try again later.' },
+      { status: 429, headers: { ...CORS_HEADERS, 'Retry-After': String(rl.retryAfter) } },
+    );
+  }
+
   let body: Record<string, unknown>;
   try {
     body = (await request.json()) as Record<string, unknown>;
@@ -91,7 +92,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       { status: 400, headers: CORS_HEADERS },
     );
   }
-
   if (description.trim().length > 2000) {
     return NextResponse.json(
       { error: '`description` must be 2000 characters or fewer' },
@@ -100,8 +100,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   }
 
   const safeUrl = validateUrl(url);
-  const safeUserAgent =
-    typeof user_agent === 'string' ? user_agent.slice(0, 512) : null;
+  const safeUserAgent = typeof user_agent === 'string' ? user_agent.slice(0, 512) : null;
   const safeContext = validateContext(context);
 
   const { data: report, error: insertError } = await getSupabase()
@@ -120,6 +119,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: 'Failed to create report' }, { status: 500, headers: CORS_HEADERS });
   }
 
+  const from = process.env.RESEND_FROM_EMAIL ?? 'fixit <onboarding@resend.dev>';
   const timestamp = new Date().toUTCString();
   const emailBody = [
     `App:         ${app.name}`,
@@ -129,7 +129,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   ].join('\n');
 
   await getResend().emails.send({
-    from: 'fixit <onboarding@resend.dev>',
+    from,
     to: process.env.OWNER_EMAIL!,
     subject: `[fixit] New bug report: ${app.name}`,
     text: emailBody,
