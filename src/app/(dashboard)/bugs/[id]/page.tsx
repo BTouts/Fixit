@@ -1,10 +1,11 @@
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { getSupabase } from '@/lib/supabase';
-import type { BugReportWithApp, BugStatus } from '@/lib/types';
+import type { BugReportWithApp, BugStatus, FixSuggestion } from '@/lib/types';
 import { STATUS_LABELS, STATUS_CLASSES } from '@/lib/statusConfig';
 import StatusUpdater from './StatusUpdater';
 import ExternalLink from '@/components/ExternalLink';
+import FixSuggestionPanel from '@/components/FixSuggestionPanel';
 
 export const dynamic = 'force-dynamic';
 
@@ -37,6 +38,16 @@ export default async function BugDetailPage({ params }: PageProps) {
   }
 
   const bug = data as BugReportWithApp;
+
+  const { data: suggestionData } = await getSupabase()
+    .from('fix_suggestions')
+    .select('*')
+    .eq('bug_report_id', id)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  const suggestion = (suggestionData ?? null) as FixSuggestion | null;
 
   return (
     <div className="max-w-3xl">
@@ -126,6 +137,8 @@ export default async function BugDetailPage({ params }: PageProps) {
             </pre>
           </div>
         )}
+
+        <FixSuggestionPanel bugReportId={bug.id} initial={suggestion} />
       </div>
     </div>
   );

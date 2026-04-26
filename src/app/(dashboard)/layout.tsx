@@ -1,5 +1,7 @@
 import type { ReactNode } from 'react';
 import Link from 'next/link';
+import NavLinks from '@/components/NavLinks';
+import LogoutButton from '@/components/LogoutButton';
 
 export default function DashboardLayout({ children }: { children: ReactNode }) {
   return (
@@ -11,26 +13,11 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
           </Link>
         </div>
 
-        <nav className="flex-1 px-3 py-4 space-y-0.5">
-          <Link
-            href="/bugs"
-            className="flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-800 transition-colors"
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 20 20"
-              fill="currentColor"
-              className="w-4 h-4 shrink-0 text-gray-400"
-            >
-              <path
-                fillRule="evenodd"
-                d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z"
-                clipRule="evenodd"
-              />
-            </svg>
-            Bug Reports
-          </Link>
-        </nav>
+        <NavLinks />
+
+        <div className="px-3 py-3 border-t border-gray-800 shrink-0">
+          <LogoutButton />
+        </div>
       </aside>
 
       <div className="pl-56">

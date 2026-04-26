@@ -1,11 +1,28 @@
 import Link from 'next/link';
 import { getSupabase } from '@/lib/supabase';
-import type { BugReportWithApp } from '@/lib/types';
-import { relativeTime } from '@/lib/relativeTime';
+import type { BugReportWithApp, BugStatus } from '@/lib/types';
 import { STATUS_LABELS, STATUS_CLASSES } from '@/lib/statusConfig';
+import { relativeTime } from '@/lib/relativeTime';
+import QuickStatusSelect from '@/components/QuickStatusSelect';
 import ExternalLink from '@/components/ExternalLink';
 
 export const dynamic = 'force-dynamic';
+
+const STATUS_ORDER: BugStatus[] = ['open', 'in_progress', 'resolved', 'closed'];
+
+const STATUS_DOT: Record<BugStatus, string> = {
+  open: 'bg-yellow-400',
+  in_progress: 'bg-blue-400',
+  resolved: 'bg-green-400',
+  closed: 'bg-gray-500',
+};
+
+const STATUS_BORDER: Record<BugStatus, string> = {
+  open: 'border-l-yellow-500/50',
+  in_progress: 'border-l-blue-500/50',
+  resolved: 'border-l-green-500/50',
+  closed: 'border-l-gray-600/50',
+};
 
 export default async function BugsPage() {
   const { data, error } = await getSupabase()
@@ -23,11 +40,21 @@ export default async function BugsPage() {
 
   const bugs = (data ?? []) as BugReportWithApp[];
 
+  const grouped = STATUS_ORDER.reduce<Record<BugStatus, BugReportWithApp[]>>(
+    (acc, s) => { acc[s] = []; return acc; },
+    {} as Record<BugStatus, BugReportWithApp[]>,
+  );
+  for (const bug of bugs) {
+    grouped[bug.status as BugStatus]?.push(bug);
+  }
+
+  const activeSections = STATUS_ORDER.filter((s) => grouped[s].length > 0);
+
   return (
     <div>
-      <div className="mb-6">
+      <div className="mb-8">
         <h1 className="text-xl font-semibold text-white">Bug Reports</h1>
-        <p className="mt-1 text-sm text-gray-400">
+        <p className="mt-1 text-sm text-gray-500">
           {bugs.length} {bugs.length === 1 ? 'report' : 'reports'} total
         </p>
       </div>
@@ -37,62 +64,54 @@ export default async function BugsPage() {
           <p className="text-sm text-gray-500">No bug reports yet.</p>
         </div>
       ) : (
-        <div className="rounded-lg border border-gray-800 overflow-hidden">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-gray-900 border-b border-gray-800">
-                <th className="text-left px-4 py-3 font-medium text-gray-400">App</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-400">Description</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-400">Status</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-400">URL</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-400 whitespace-nowrap">Created</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-800">
-              {bugs.map((bug) => (
-                <tr
-                  key={bug.id}
-                  className="bg-gray-900/50 hover:bg-gray-800/60 transition-colors"
-                >
-                  <td className="px-4 py-3 text-gray-300 whitespace-nowrap">
-                    <Link href={`/bugs/${bug.id}`} className="block hover:text-white transition-colors">
-                      {bug.apps?.name ?? <span className="text-gray-500 italic">Unknown</span>}
+        <div className="space-y-10">
+          {activeSections.map((status) => (
+            <section key={status}>
+              <div className="flex items-center gap-2 mb-3">
+                <span className={`w-2 h-2 rounded-full shrink-0 ${STATUS_DOT[status]}`} />
+                <h2 className="text-sm font-semibold text-gray-300">{STATUS_LABELS[status]}</h2>
+                <span className="text-xs text-gray-600 font-mono">{grouped[status].length}</span>
+              </div>
+
+              <div className="space-y-2">
+                {grouped[status].map((bug) => (
+                  <div
+                    key={bug.id}
+                    className={`relative rounded-lg border border-gray-800 border-l-2 bg-gray-900 hover:bg-gray-800/60 transition-colors ${STATUS_BORDER[status]}`}
+                  >
+                    {/* Full-area link for navigation */}
+                    <Link href={`/bugs/${bug.id}`} className="block px-4 pt-4 pb-3">
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="min-w-0 space-y-1">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-medium text-gray-500">
+                              {bug.apps?.name ?? <span className="italic">Unknown</span>}
+                            </span>
+                          </div>
+                          <p className="text-sm text-gray-200 leading-snug">
+                            {bug.description.length > 120
+                              ? bug.description.slice(0, 120) + '…'
+                              : bug.description}
+                          </p>
+                          {bug.url && (
+                            <p className="text-xs text-gray-600 truncate max-w-sm">{bug.url}</p>
+                          )}
+                        </div>
+                        <span className="text-xs text-gray-600 whitespace-nowrap shrink-0 pt-0.5">
+                          {relativeTime(bug.created_at)}
+                        </span>
+                      </div>
                     </Link>
-                  </td>
-                  <td className="px-4 py-3 text-gray-300 max-w-xs">
-                    <Link href={`/bugs/${bug.id}`} className="block hover:text-white transition-colors">
-                      {bug.description.length > 80
-                        ? bug.description.slice(0, 80) + '…'
-                        : bug.description}
-                    </Link>
-                  </td>
-                  <td className="px-4 py-3 whitespace-nowrap">
-                    <span
-                      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${STATUS_CLASSES[bug.status]}`}
-                    >
-                      {STATUS_LABELS[bug.status]}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-gray-400 max-w-[200px] truncate">
-                    {bug.url ? (
-                      <ExternalLink
-                        href={bug.url}
-                        className="text-blue-400 hover:text-blue-300 hover:underline text-xs"
-                        title={bug.url}
-                      >
-                        {bug.url}
-                      </ExternalLink>
-                    ) : (
-                      <span className="text-gray-600">—</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 text-gray-500 whitespace-nowrap text-xs">
-                    {relativeTime(bug.created_at)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+
+                    {/* Status buttons — outside the Link so they don't trigger navigation */}
+                    <div className="px-4 pb-3">
+                      <QuickStatusSelect bugId={bug.id} initialStatus={bug.status as BugStatus} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+          ))}
         </div>
       )}
     </div>

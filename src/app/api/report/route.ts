@@ -1,9 +1,10 @@
 import { createHash } from 'crypto';
-import { NextResponse } from 'next/server';
+import { after, NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { Resend } from 'resend';
 import { getSupabase } from '@/lib/supabase';
 import { checkRateLimit } from '@/lib/rateLimit';
+import { runFixSuggestion } from '@/lib/fixSuggestion';
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -24,6 +25,8 @@ function getResend() {
 type AppRow = {
   id: string;
   name: string;
+  github_repo: string | null;
+  auto_suggest: boolean;
 };
 
 function validateUrl(value: unknown): string | null {
@@ -60,7 +63,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   const { data: app, error: appError } = await getSupabase()
     .from('apps')
-    .select('id, name')
+    .select('id, name, github_repo, auto_suggest')
     .eq('api_key_hash', keyHash)
     .single<AppRow>();
 
@@ -134,6 +137,25 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     subject: `[fixit] New bug report: ${app.name}`,
     text: emailBody,
   });
+
+  // Auto-generate fix suggestion in the background if enabled for this app
+  if (app.auto_suggest && app.github_repo) {
+    const bugReportId = report.id;
+    const repo = app.github_repo;
+
+    after(async () => {
+      const supabase = getSupabase();
+      const { data: suggestion } = await supabase
+        .from('fix_suggestions')
+        .insert({ bug_report_id: bugReportId, status: 'pending' })
+        .select('id')
+        .single<{ id: string }>();
+
+      if (suggestion) {
+        await runFixSuggestion(suggestion.id, bugReportId, repo);
+      }
+    });
+  }
 
   return NextResponse.json({ id: report.id }, { status: 201, headers: CORS_HEADERS });
 }
