@@ -5,6 +5,8 @@ import { STATUS_LABELS, STATUS_CLASSES } from '@/lib/statusConfig';
 import { relativeTime } from '@/lib/relativeTime';
 import QuickStatusSelect from '@/components/QuickStatusSelect';
 import ExternalLink from '@/components/ExternalLink';
+import BugsRealtimeRefresher from '@/components/BugsRealtimeRefresher';
+import RefreshButton from '@/components/RefreshButton';
 
 export const dynamic = 'force-dynamic';
 
@@ -52,8 +54,12 @@ export default async function BugsPage() {
 
   return (
     <div>
+      <BugsRealtimeRefresher />
       <div className="mb-8">
-        <h1 className="text-xl font-semibold text-white">Bug Reports</h1>
+        <div className="flex items-center gap-3">
+          <h1 className="text-xl font-semibold text-white">Bug Reports</h1>
+          <RefreshButton />
+        </div>
         <p className="mt-1 text-sm text-gray-500">
           {bugs.length} {bugs.length === 1 ? 'report' : 'reports'} total
         </p>

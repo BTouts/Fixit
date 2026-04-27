@@ -9,7 +9,7 @@ function buildCsp(nonce: string): string {
     `script-src 'self' 'nonce-${nonce}'${isDev ? " 'unsafe-eval'" : ''}`,
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob:",
-    "connect-src 'self' https://*.supabase.co",
+    "connect-src 'self' https://*.supabase.co wss://*.supabase.co",
     "font-src 'self'",
     "frame-ancestors 'none'",
     "base-uri 'self'",
